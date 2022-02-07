@@ -6,6 +6,7 @@ import numpy
 
 from ..common.compilation.artifacts import CompilationArtifacts
 from ..common.compilation.configuration import CompilationConfiguration
+from ..common.debugging.custom_assert import assert_true
 from ..common.fhe_circuit import FHECircuit
 from ..numpy.np_fhe_compiler import NPFHECompiler
 from .quantized_array import QuantizedArray
@@ -48,7 +49,7 @@ class QuantizedModule:
         # Later we might want to only allow nympy.array input
         if not isinstance(q_x, QuantizedArray):
             assert self.q_input is not None
-            self.q_input.update_qvalues(q_x)
+            self.q_input.update_quantized_values(q_x)
             q_x = self.q_input
 
         for _, layer in self.quant_layers_dict.items():
@@ -75,6 +76,25 @@ class QuantizedModule:
         q_out = self.forward(q_x)
         return self.dequantize_output(q_out)
 
+    def quantize_input(self, values: numpy.ndarray) -> numpy.ndarray:
+        """Take the inputs in fp32 and quantize it using the learned quantization parameters.
+
+        Args:
+            values (numpy.ndarray): Floating point values.
+
+        Returns:
+            numpy.ndarray: Quantized (numpy.uint8) values.
+        """
+        # satisfy mypy
+        assert self.q_input is not None
+        qvalues = self.q_input.update_values(values)
+        assert qvalues is not None
+        assert_true(
+            numpy.array_equal(qvalues.astype(numpy.uint32), qvalues),
+            on_error_msg="Input quantizer does not give values within uint32.",
+        )
+        return qvalues.astype(numpy.uint32)
+
     def dequantize_output(self, qvalues: numpy.ndarray) -> numpy.ndarray:
         """Take the last layer q_out and use its dequant function.
 
@@ -85,7 +105,7 @@ class QuantizedModule:
             numpy.ndarray: Dequantized values of the last layer.
         """
         last_layer = list(self.quant_layers_dict.values())[-1]
-        real_values = last_layer.q_out.update_qvalues(qvalues)
+        real_values = last_layer.q_out.update_quantized_values(qvalues)
         return real_values
 
     def compile(

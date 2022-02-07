@@ -99,7 +99,7 @@ class QuantizedArray:
         self.quant()
         return self.qvalues
 
-    def update_qvalues(self, qvalues: numpy.ndarray) -> Optional[numpy.ndarray]:
+    def update_quantized_values(self, qvalues: numpy.ndarray) -> Optional[numpy.ndarray]:
         """Update qvalues to get their corresponding values using the related quantized parameters.
 
         Args:
