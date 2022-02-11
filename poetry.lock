@@ -2000,7 +2000,7 @@ rtd = ["sphinx", "ipython", "sphinx-book-theme"]
 
 [[package]]
 name = "sphinx-zama-theme"
-version = "2.0.8"
+version = "2.2.0"
 description = "Zama sphinx theme forked from PyData sphinx theme"
 category = "dev"
 optional = false
@@ -2346,7 +2346,7 @@ full = ["pygraphviz"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.8,<3.10"
-content-hash = "172f6d91b9fb861532cdadd18d926808b8aff097788f169ab76b3a74d7753544"
+content-hash = "f94ebfd90750ab82b3486df703844ac3b52c6d51b701881ff13e0b4c3c23d8a5"
 
 [metadata.files]
 alabaster = [
@@ -3640,7 +3640,7 @@ sphinx-copybutton = [
     {file = "sphinx_copybutton-0.4.0-py3-none-any.whl", hash = "sha256:4340d33c169dac6dd82dce2c83333412aa786a42dd01a81a8decac3b130dc8b0"},
 ]
 sphinx-zama-theme = [
-    {file = "sphinx_zama_theme-2.0.8.tar.gz", hash = "sha256:9f5eec7c6f37c323c03f891528520695ed258a42d7920417b28e1d130f630e0d"},
+    {file = "sphinx_zama_theme-2.2.0.tar.gz", hash = "sha256:a196af69d87c09b989272478ff2270e0df19c70152b5810b12129169e9319b5e"},
 ]
 sphinxcontrib-applehelp = [
     {file = "sphinxcontrib-applehelp-1.0.2.tar.gz", hash = "sha256:a072735ec80e7675e3f432fcae8610ecf509c5f1869d17e2eecff44389cdbc58"},
