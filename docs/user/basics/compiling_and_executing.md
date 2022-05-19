@@ -92,10 +92,10 @@ circuit.encrypt_run_decrypt(0, 0)
 # 0
 ```
 
-```{caution}
+{% hint style='warning' %}
 Be careful about the inputs, though.
 If you were to run with values outside the range of the inputset, the result might not be correct.
-```
+{% endhint %}
 
 While `.encrypt_run_decrypt(...)` is a good start for prototyping examples, more advanced usages require control over the different steps that are happening behind the scene, mainly key generation, encryption, execution, and decryption. The different steps can of course be called separately as in the example below:
 
