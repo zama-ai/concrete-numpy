@@ -8,18 +8,18 @@ To install **Concrete Numpy** from PyPi, run the following:
 pip install concrete-numpy
 ```
 
-```{note}
+{% hint style='info' %}
 Note that **concrete-numpy** has `pygraphviz` as an optional dependency to draw graphs.
-```
+{% endhint %}
 
-```{WARNING}
+{% hint style='info' %}
 `pygraphviz` requires `graphviz` packages being installed on your OS, see <a href="https://pygraphviz.github.io/documentation/stable/install.html">https://pygraphviz.github.io/documentation/stable/install.html</a>
-```
+{% endhint %}
 
-```{DANGER}
+{% hint style='tip' %}
 `graphviz` packages are binary packages that won't automatically be installed by pip.
 Do check <a href="https://pygraphviz.github.io/documentation/stable/install.html">https://pygraphviz.github.io/documentation/stable/install.html</a> for instructions on how to install `graphviz` for `pygraphviz`.
-```
+{% endhint %}
 
 You can install the extra python dependencies for drawing with:
 

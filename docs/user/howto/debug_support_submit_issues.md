@@ -1,6 +1,6 @@
 # Debugging / Support / Submitting Issues
 
-This version of **Concrete Numpy** is a first version of the product, meaning that it is not completely finished, contains several bugs (would they be known or unknown at this time), and will improve over time with feedback from early users. 
+This version of **Concrete Numpy** is a first version of the product, meaning that it is not completely finished, contains several bugs (would they be known or unknown at this time), and will improve over time with feedback from early users.
 
 Here are some ways to debug your problems. If nothing seems conclusive, you can still report the issue, as explained in a later section of this page.
 

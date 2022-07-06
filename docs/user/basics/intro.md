@@ -27,9 +27,10 @@ Basically, we have divided our documentation into several parts:
 
 ## A work in progress
 
-```{note}
+
+{% hint style='info' %}
 Concrete is a work in progress, and is currently limited to a certain number of operators and features. In the future, there will be improvements as described in this [section](../explanation/future_features.md).
-```
+{% endhint %}
 
 The main _current_ limits are:
 - **Concrete** only supports unsigned integers
