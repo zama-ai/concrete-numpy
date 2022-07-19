@@ -24,9 +24,9 @@ With Concrete Numpy, data scientists can implement machine learning models using
 <!-- /TOC -->
 # Links
 
-- [documentation](https://docs.zama.ai/concrete-numpy/main/)
-- [community website](https://community.zama.ai/c/concrete-numpy/7)
-- [machine learning examples](https://docs.zama.ai/concrete-numpy/main/user/advanced_examples/index.html)
+- [documentation](https://docs.zama.ai/concrete-numpy/)
+- [community website](https://community.zama.ai/c/concrete-numpy/)
+
 # For end users
 
 ## Installation
