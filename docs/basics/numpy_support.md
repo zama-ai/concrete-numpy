@@ -27,6 +27,7 @@ List of supported functions:
 - cosh
 - deg2rad
 - degrees
+- divide
 - dot
 - equal
 - exp
@@ -93,7 +94,6 @@ List of supported functions:
 - tan
 - tanh
 - transpose
-- true_divide
 - trunc
 - where
 - zeros_like
