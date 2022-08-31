@@ -2029,7 +2029,7 @@ full = ["pygraphviz"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.8,<3.10"
-content-hash = "773aeda8507d45496e513ce0588cc503adfe072524209e20e23743b8b29fdadc"
+content-hash = "3fb4ea8f541e7dea950021c14a05a67e5bda50614123f8b504edb02e2d227feb"
 
 [metadata.files]
 appnope = [

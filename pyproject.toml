@@ -78,6 +78,7 @@ pip-licenses = "^3.5.3"
 pip-audit = "^1.1.1"
 pytest-codeblocks = "^0.12.2"
 twine = "^3.7.1"
+requests = "^2.28.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
@@ -89,7 +90,8 @@ filterwarnings = [
     "ignore:Implicitly cleaning up:ResourceWarning",
     "ignore:pandas not found, skipping conversion test.:ImportWarning",
     "ignore:scipy not found, skipping conversion test.:ImportWarning",
-    "ignore:Matplotlib is currently using .*, which is a non-GUI backend, so cannot show the figure\\.:UserWarning"
+    "ignore:Matplotlib is currently using .*, which is a non-GUI backend, so cannot show the figure\\.:UserWarning",
+    "ignore:RequestsDependencyWarning"
 ]
 
 [tool.semantic_release]

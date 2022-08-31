@@ -10,6 +10,7 @@ SRC_DIR:=concrete
 setup_env:
 	poetry run python -m pip install -U pip wheel
 	poetry run python -m pip install -U --force-reinstall setuptools
+	poetry run python -m pip install -U requests
 	if [[ $$(uname) != "Linux" ]] && [[ $$(uname) != "Darwin" ]]; then \
 		poetry install --extras full --only dev; \
 	else \
