@@ -464,6 +464,9 @@ jobs:
     name: Package and artifacts release
     runs-on: ubuntu-20.04
 
+    container:
+          image: ubuntu:20.04
+
     env:
       PRIVATE_RELEASE_IMAGE_BASE: ghcr.io/zama-ai/concrete-numpy
       PUBLIC_RELEASE_IMAGE_BASE: zamafhe/concrete-numpy
@@ -476,6 +479,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get install --no-install-recommends -y graphviz*
+          sudo apt-get install --no-install-recommends -y gnome-keyring
           python -m pip install --upgrade pip
           python -m pip install poetry
           make setup_env
