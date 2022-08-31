@@ -464,9 +464,6 @@ jobs:
     name: Package and artifacts release
     runs-on: ubuntu-20.04
 
-    container:
-          image: ubuntu:20.04
-
     env:
       PRIVATE_RELEASE_IMAGE_BASE: ghcr.io/zama-ai/concrete-numpy
       PUBLIC_RELEASE_IMAGE_BASE: zamafhe/concrete-numpy
@@ -474,6 +471,7 @@ jobs:
     steps:
       - uses: actions/checkout@2541b1294d2704b0964813337f33b291d3f8596b
 
+      # Gnome keyring is required because of some environment issue in github actions
       # See #570 To be updated to only install required dependencies group with poetry 1.2 and
       # remove graphviz installs which are only required for the actual package and not dev tools
       - name: Install dependencies
