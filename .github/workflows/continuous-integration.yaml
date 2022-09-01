@@ -23,6 +23,8 @@ env:
   IS_WEEKLY: ${{ github.event_name == 'schedule' }}
   IS_RELEASE: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
   IS_PUSH_TO_MAIN: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+  AGENT_TOOLSDIRECTORY: /opt/hostedtoolcache
+  RUNNER_TOOL_CACHE: /opt/hostedtoolcache
 
 jobs:
   matrix-preparation:
@@ -174,7 +176,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python ${{ matrix.python_version }}
-        uses: actions/setup-python@d09bd5e6005b175076f227b13d9730d56e9dcfcb
+        uses: actions/setup-python@b55428b1882923874294fa556849718a1d7f2ca5
         with:
           python-version: ${{ matrix.python_version }}
 
@@ -383,7 +385,7 @@ jobs:
         uses: actions/checkout@2541b1294d2704b0964813337f33b291d3f8596b
 
       - name: Set up Python ${{ matrix.python_version }}
-        uses: actions/setup-python@d09bd5e6005b175076f227b13d9730d56e9dcfcb
+        uses: actions/setup-python@b55428b1882923874294fa556849718a1d7f2ca5
         with:
           python-version: ${{ matrix.python_version }}
 
@@ -409,7 +411,7 @@ jobs:
         uses: actions/checkout@2541b1294d2704b0964813337f33b291d3f8596b
 
       - name: Set up Python 3.8
-        uses: actions/setup-python@d09bd5e6005b175076f227b13d9730d56e9dcfcb
+        uses: actions/setup-python@b55428b1882923874294fa556849718a1d7f2ca5
         with:
           python-version: '3.8'
 
@@ -469,11 +471,13 @@ jobs:
     steps:
       - uses: actions/checkout@2541b1294d2704b0964813337f33b291d3f8596b
 
+      # Gnome keyring is required because of some environment issue in github actions
       # See #570 To be updated to only install required dependencies group with poetry 1.2 and
       # remove graphviz installs which are only required for the actual package and not dev tools
       - name: Install dependencies
         run: |
           sudo apt-get install --no-install-recommends -y graphviz*
+          sudo apt-get install --no-install-recommends -y gnome-keyring
           python -m pip install --upgrade pip
           python -m pip install poetry
           make setup_env
