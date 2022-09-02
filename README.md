@@ -55,7 +55,7 @@ pip install concrete-numpy
 You can get the concrete-numpy docker image by  pulling the latest docker image:
 
 ```shell
-docker pull zamafhe/concrete-numpy:v0.6.0
+docker pull zamafhe/concrete-numpy:v0.7.0
 ```
 
 You can find more detailed installation instructions in [installing.md](docs/basics/installing.md)

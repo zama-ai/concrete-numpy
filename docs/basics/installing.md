@@ -29,7 +29,7 @@ pip install concrete-numpy[full]
 You can also get the **Concrete Numpy** docker image:
 
 ```shell
-docker pull zamafhe/concrete-numpy:v0.6.0
+docker pull zamafhe/concrete-numpy:v0.7.0
 ```
 
 ### Starting Jupyter server
@@ -37,13 +37,13 @@ docker pull zamafhe/concrete-numpy:v0.6.0
 By default, the entry point of the **Concrete Numpy** docker image is a jupyter server that you can access from your browser:
 
 ```shell
-docker run --rm -it -p 8888:8888 zamafhe/concrete-numpy:latest
+docker run --rm -it -p 8888:8888 zamafhe/concrete-numpy:v0.7.0
 ```
 
 To save notebooks on host, you can use a local volume:
 
 ```shell
-docker run --rm -it -p 8888:8888 -v /path/to/notebooks:/data zamafhe/concrete-numpy:latest
+docker run --rm -it -p 8888:8888 -v /path/to/notebooks:/data zamafhe/concrete-numpy:v0.7.0
 ```
 
 ### Starting Bash session
