@@ -325,6 +325,11 @@ jobs:
           name: py3-wheel
           path: dist/*.whl
 
+      - name: Ruff lints
+        run: |
+          pip3 install ruff
+          ruff .
+
       - name: PyTest Source Code
         id: pytest
         if: ${{ steps.conformance.outcome == 'success' && !cancelled() }}
