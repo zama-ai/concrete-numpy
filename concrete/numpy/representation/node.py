@@ -362,7 +362,19 @@ class Node:
             bool:
                 True if the node is converted to a table lookup, False otherwise
         """
-
+        # nodes with more than two encrypted operands can't get fused
+        encrypted_inputs = [i for i in self.inputs if i.is_encrypted]
+        if (
+            len(encrypted_inputs) > 1
+            and self.operation == Operation.Generic
+            and self.properties["name"]
+            in [
+                "bitwise_or",
+                "bitwise_and",
+                "bitwise_xor",
+            ]
+        ):
+            return False
         return self.operation == Operation.Generic and self.properties["name"] not in [
             "add",
             "array",

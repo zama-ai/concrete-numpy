@@ -4,6 +4,7 @@ Declaration of `NodeConverter` class.
 
 # pylint: disable=no-member,no-name-in-module,too-many-lines
 
+from copy import deepcopy
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -52,6 +53,11 @@ class NodeConverter:
 
     constant_cache: Dict[Tuple[Type, Attribute], OpResult]
     from_elements_operations: Dict[OpResult, List[OpResult]]
+
+    # When converting bitwise / comparison operations convert
+    # in chunk of [n] bits.
+    # Can be configured
+    bit_group_size: int = 2
 
     # pylint: enable=too-many-instance-attributes
 
@@ -175,6 +181,9 @@ class NodeConverter:
             "sum": self._convert_sum,
             "transpose": self._convert_transpose,
             "zeros": self._convert_zeros,
+            "bitwise_and": self._convert_bitwise_and,
+            "bitwise_or": self._convert_bitwise_or,
+            "bitwise_xor": self._convert_bitwise_xor,
         }
 
         if name in converters:
@@ -183,8 +192,130 @@ class NodeConverter:
         assert_that(self.node.converted_to_table_lookup)
         return self._convert_tlu()
 
-    # pylint: disable=no-self-use
+    def _1d_lut(self, resulting_type, pred, lut_values) -> OpResult:
+        lut_type = RankedTensorType.get(
+            (len(lut_values),), IntegerType.get_signless(64, context=self.ctx)
+        )
+        lut_attr = Attribute.parse(f"dense<{str(lut_values)}> : {lut_type}")
+        lut = self._create_constant(resulting_type, lut_attr).result
+        out = None
+        if self.one_of_the_inputs_is_a_tensor:
+            out = fhelinalg.ApplyLookupTableEintOp(resulting_type, pred, lut).result
+        else:
+            out = fhe.ApplyLookupTableEintOp(resulting_type, pred, lut).result
+        return out
 
+    def _add(self, resulting_type, a, b) -> OpResult:
+        out = None
+        if self.one_of_the_inputs_is_a_tensor:
+            out = fhelinalg.AddEintOp(resulting_type, a, b).result
+        else:
+            out = fhe.AddEintOp(resulting_type, a, b).result
+        return out
+    def _zero(self, resulting_type) -> OpResult:
+        out = None
+        if self.one_of_the_inputs_is_a_tensor:
+            out = fhe.ZeroTensorOp(resulting_type).result
+        else:
+            out = fhe.ZeroEintOp(resulting_type).result
+        return out
+
+    def _generate_type_fixed_bit_width_unsigned(self, type_, bit_width):
+        t = deepcopy(type_)
+        t.dtype.bit_width = bit_width
+        t.dtype.is_signed = False
+        return NodeConverter.value_to_mlir_type(self.ctx, t)
+
+    def _convert_bitwise_op(self, bitwise_op) -> OpResult:
+        """
+        Convert a bitwise operation corresponding to `bitwise_op`
+
+        Returns:
+            OpResult:
+                in-memory MLIR representation corresponding to `self.node`
+        """
+        if not self.all_of_the_inputs_are_encrypted:
+            return self._convert_tlu()
+
+        assert isinstance(self.node.output.dtype, Integer)
+        resulting_type = NodeConverter.value_to_mlir_type(self.ctx, self.node.output)
+        bit_width = self.node.output.dtype.bit_width
+
+        x = self.preds[0]
+        y = self.preds[1]
+
+        z = self._zero(resulting_type)
+        max_bit_width = 1 << bit_width
+        # This algorithm works as follow:
+        # Each input x and y can be written as (each letter is one bit):
+        # X = aabbccdd
+        # Y = eeffgghh
+        # Computing X op Y can be done as follow (assuming that op doesn't
+        # overflow, which is the case for bitwise operations)
+        # X op y = (aa op ee) (bb op ff) (cc op gg) (dd op hh)
+        # This mean that we can reduce the case of a bitwise operation on
+        # large integers to the case of bitwise operation on smaller integers.
+        # Know to compute aa op ee we can use a lut if we use the following trick:
+        # There's a bijection between (aa, ee) and (aa << 2 + ee), so we can precompute
+        # all aa op ee and put them in a lut indexed by (aa << 2 + ee)
+        for offset in range(0, bit_width, self.bit_group_size):
+            bit_width_this = self.bit_group_size
+
+            bitwise_lut = [
+                bitwise_op(x, y) << offset
+                for x in range(1 << bit_width_this)
+                for y in range(1 << bit_width_this)
+            ]
+            twice_this_type = self._generate_type_fixed_bit_width_unsigned(
+                self.node.output, bit_width_this * 2
+            )
+            mask = (1 << bit_width_this) - 1
+            # Could be optimized using rounded table lookups -- here we don't care about most of the
+            # bits.
+            x_l = self._1d_lut(
+                twice_this_type,
+                x,
+                [((x >> offset) & mask) << bit_width_this for x in range(max_bit_width)],
+            )
+            y_l = self._1d_lut(
+                twice_this_type, y, [(y >> offset) & mask for y in range(max_bit_width)]
+            )
+            idx = self._add(twice_this_type, x_l, y_l)
+            z_chunk = self._1d_lut(resulting_type, idx, bitwise_lut)
+            z = self._add(resulting_type, z, z_chunk)
+        return z
+
+    def _convert_bitwise_and(self) -> OpResult:
+        """
+        Convert "bitwise_and" node to its corresponding MLIR representation.
+
+        Returns:
+            OpResult:
+                in-memory MLIR representation corresponding to `self.node`
+        """
+        return self._convert_bitwise_op(lambda x, y: x & y)
+
+    def _convert_bitwise_or(self) -> OpResult:
+        """
+        Convert "bitwise_or" node to its corresponding MLIR representation.
+
+        Returns:
+            OpResult:
+                in-memory MLIR representation corresponding to `self.node`
+        """
+        return self._convert_bitwise_op(lambda x, y: x | y)
+
+    def _convert_bitwise_xor(self) -> OpResult:
+        """
+        Convert "bitwise_xor" node to its corresponding MLIR representation.
+
+        Returns:
+            OpResult:
+                in-memory MLIR representation corresponding to `self.node`
+        """
+        return self._convert_bitwise_op(lambda x, y: x ^ y)
+
+    # pylint: disable=no-self-use
     def _convert_add(self) -> OpResult:
         """
         Convert "add" node to its corresponding MLIR representation.
