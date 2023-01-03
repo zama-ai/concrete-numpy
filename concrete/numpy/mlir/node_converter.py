@@ -202,6 +202,8 @@ class NodeConverter:
             "greater_equal": self._convert_greater_equal,
             "equal": self._convert_equal,
             "not_equal": self._convert_not_equal,
+            "left_shift": self._convert_left_shift,
+            "right_shift": self._convert_right_shift,
         }
 
         if name in converters:
@@ -230,6 +232,15 @@ class NodeConverter:
         else:
             out = fhe.AddEintOp(resulting_type, a, b).result
         return out
+
+    def _sub(self, resulting_type, a, b) -> OpResult:
+        out = None
+        if self.one_of_the_inputs_is_a_tensor:
+            out = fhelinalg.SubEintOp(resulting_type, a, b).result
+        else:
+            out = fhe.SubEintOp(resulting_type, a, b).result
+        return out
+
     def _zero(self, resulting_type) -> OpResult:
         out = None
         if self.one_of_the_inputs_is_a_tensor:
@@ -696,6 +707,116 @@ class NodeConverter:
                 in-memory MLIR representation corresponding to `self.node`
         """
         return self._convert_bitwise_op(lambda x, y: x ^ y)
+
+    def _convert_shift(self, left_shift=False) -> OpResult:
+        if not self.all_of_the_inputs_are_encrypted:
+            return self._convert_tlu()
+
+        assert isinstance(self.node.output.dtype, Integer)
+        resulting_type = NodeConverter.value_to_mlir_type(self.ctx, self.node.output)
+        bit_width = self.node.output.dtype.bit_width
+        group_size = min(7, bit_width)
+        max_bit_width = 1 << bit_width
+        x = self.preds[0]
+        b = self.preds[1]
+
+        # Left_shifts of x << b can be done as follow:
+        # - left shift of x by 8 if b & 0b1000 > 0
+        # - left shift of x by 4 if b & 0b0100 > 0
+        # - left shift of x by 2 if b & 0b0010 > 0
+        # - left shift of x by 1 if b & 0b0001 > 0
+        # Encoding this condition is non trivial -- however,
+        # it can be done using the following trick:
+        # y = (b & 0b1000 > 0) * ((x << 8) - x) + x
+        # When b & 0b1000, then:
+        #   y = 1 * ((x << 8) - x) + x = (x << 8) - x + x = x << 8
+        # When b & 0b1000 == 0 then:
+        #   y = 0 * ((x << 8) - x) + x = x
+        # Note that (x << 8) - x will never overflow.
+        #
+        # The same trick can be used for right shift but with:
+        # y = x - (b & 0b1000 > 0) * (x - (x >> 8))
+
+        def generate_for(x, cst):
+            this_type = self._generate_type_fixed_bit_width_unsigned(
+                self.node.output, group_size + 1
+            )
+            should_shift = self._1d_lut(
+                this_type,
+                b,
+                [int((b & cst) > 0) for b in range(1 << self.node.inputs[1].dtype.bit_width)],
+            )
+            shifted_x = None
+
+            if left_shift:
+                shifted_x = self._1d_lut(
+                    resulting_type, x, [x << cst for x in range(1 << bit_width)]
+                )
+                shifted_x = self._sub(resulting_type, shifted_x, x)
+            else:
+                shifted_x = self._1d_lut(
+                    resulting_type, x, [x >> cst for x in range(1 << bit_width)]
+                )
+                shifted_x = self._sub(resulting_type, x, shifted_x)
+
+            chunks = []
+            for offset in range(0, bit_width, group_size):
+                bit_width_this = min(group_size, bit_width - offset)
+                mask = (1 << bit_width_this) - 1
+                to_right_shift_by = bit_width - offset - bit_width_this
+                # Once rounded lookups are available in mlir use them below
+                chunk_x = self._1d_lut(
+                    this_type,
+                    shifted_x,
+                    [(((x >> to_right_shift_by) & mask) << 1) for x in range(max_bit_width)],
+                )
+                chunk_x = self._add(this_type, chunk_x, should_shift)
+
+                chunk = self._1d_lut(
+                    resulting_type,
+                    chunk_x,
+                    [
+                        x << to_right_shift_by if b else 0
+                        for x in range(1 << group_size)
+                        for b in [0, 1]
+                    ],
+                )
+                chunks.append((chunk))
+            shifted_masked_x = chunks[0]
+            for chunk in chunks[1:]:
+                shifted_masked_x = self._add(resulting_type, shifted_masked_x, chunk)
+
+            out = None
+            if left_shift:
+                out = self._add(resulting_type, shifted_masked_x, x)
+            else:
+                out = self._sub(resulting_type, x, shifted_masked_x)
+            return out
+
+        x = generate_for(x, 8)
+        x = generate_for(x, 4)
+        x = generate_for(x, 2)
+        return generate_for(x, 1)
+
+    def _convert_left_shift(self) -> OpResult:
+        """
+        Convert "left_shift" node to its corresponding MLIR representation.
+
+        Returns:
+            OpResult:
+                in-memory MLIR representation corresponding to `self.node`
+        """
+        return self._convert_shift(left_shift=True)
+
+    def _convert_right_shift(self) -> OpResult:
+        """
+        Convert "right_shift" node to its corresponding MLIR representation.
+
+        Returns:
+            OpResult:
+                in-memory MLIR representation corresponding to `self.node`
+        """
+        return self._convert_shift(left_shift=False)
 
     # pylint: disable=no-self-use
     def _convert_add(self) -> OpResult:

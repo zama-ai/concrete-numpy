@@ -197,6 +197,12 @@ class GraphConverter:
             elif name == "not_equal":
                 assert_that(len(inputs) == 2)
 
+            elif name == "left_shift":
+                assert_that(len(inputs) == 2)
+
+            elif name == "right_shift":
+                assert_that(len(inputs) == 2)
+
             else:
                 assert_that(node.converted_to_table_lookup)
                 variable_input_indices = [

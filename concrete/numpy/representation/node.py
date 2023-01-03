@@ -378,6 +378,8 @@ class Node:
                 "greater_equal",
                 "equal",
                 "not_equal",
+                "left_shift",
+                "right_shift",
             ]
         ):
             return False
