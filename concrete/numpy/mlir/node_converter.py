@@ -5,6 +5,7 @@ Declaration of `NodeConverter` class.
 # pylint: disable=no-member,no-name-in-module,too-many-lines
 
 from copy import deepcopy
+from enum import IntEnum
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -33,6 +34,17 @@ from ..values import EncryptedScalar, Value
 from .utils import construct_deduplicated_tables
 
 # pylint: enable=no-member,no-name-in-module
+
+
+class Comparison(IntEnum):
+    """
+    Comparison enum, used when generating comparison
+    between encrypted payloads.
+    """
+
+    EQUAL = 0b00
+    LESSER = 0b01
+    GREATER = 0b10
 
 
 class NodeConverter:
@@ -184,6 +196,12 @@ class NodeConverter:
             "bitwise_and": self._convert_bitwise_and,
             "bitwise_or": self._convert_bitwise_or,
             "bitwise_xor": self._convert_bitwise_xor,
+            "less": self._convert_less,
+            "less_equal": self._convert_less_equal,
+            "greater": self._convert_greater,
+            "greater_equal": self._convert_greater_equal,
+            "equal": self._convert_equal,
+            "not_equal": self._convert_not_equal,
         }
 
         if name in converters:
@@ -220,11 +238,375 @@ class NodeConverter:
             out = fhe.ZeroEintOp(resulting_type).result
         return out
 
+    def _csti(self, resulting_type, value) -> OpResult:
+        constant_value = Value(
+            Integer(is_signed=True, bit_width=resulting_type.dtype.bit_width + 1),
+            shape=resulting_type.shape,
+            is_encrypted=False,
+        )
+        constant_type = NodeConverter.value_to_mlir_type(self.ctx, constant_value)
+        out = None
+        if self.node.output.is_scalar:
+            out = self._create_constant(constant_type, IntegerAttr.get(constant_type, value))
+        else:
+            out = self._create_constant(
+                constant_type, Attribute.parse(f"dense<{value}> : {constant_type}")
+            )
+        return out
+
+    def _add_cst(self, resulting_type, a, b) -> OpResult:
+        out = None
+        if self.one_of_the_inputs_is_a_tensor:
+            out = fhelinalg.AddEintIntOp(resulting_type, a, b).result
+        else:
+            out = fhe.AddEintIntOp(resulting_type, a, b).result
+        return out
+
     def _generate_type_fixed_bit_width_unsigned(self, type_, bit_width):
         t = deepcopy(type_)
         t.dtype.bit_width = bit_width
         t.dtype.is_signed = False
         return NodeConverter.value_to_mlir_type(self.ctx, t)
+
+    def _split_in_bit_groups(
+        self,
+        x,
+        y,
+        group_size,
+        fn_map,
+        fn_result_type,
+        offset_x_by=0,
+        offset_y_by=0,
+    ) -> OpResult:
+        """
+        Split x and y into bit groups of width [group_size].
+
+        [fn] is applied to each bit group bx and by of x and y and the result
+        is appended -- and returned -- to a list.
+
+        If [offset_x_by] (resp. [offset_y_by]) is provided then execute
+        the function for [x + offset_x_by] (resp. [y + offset_y_by]) instead
+        of [x] and [y]. This addition is not emitted in MLIR.
+        """
+        assert isinstance(self.node.output.dtype, Integer)
+
+        bit_width = self.node.output.dtype.bit_width
+        max_bit_width = 1 << bit_width
+        carries = []
+        for chunk_id, offset in enumerate(range(0, bit_width, group_size)):
+            bit_width_this = min(group_size, bit_width - offset)
+            mask = (1 << bit_width_this) - 1
+            this_type = self._generate_type_fixed_bit_width_unsigned(
+                self.node.output, bit_width_this * 2
+            )
+            to_right_shift_by = bit_width - offset - bit_width_this
+            # Once rounded lookups are available in mlir use them below
+            chunk_x = self._1d_lut(
+                this_type,
+                x,
+                [
+                    ((((x + offset_x_by) >> to_right_shift_by) & mask) << bit_width_this)
+                    for x in range(max_bit_width)
+                ],
+            )
+            chunk_y = self._1d_lut(
+                this_type,
+                y,
+                [((x + offset_y_by) >> to_right_shift_by) & mask for x in range(max_bit_width)],
+            )
+            t = self._add(this_type, chunk_x, chunk_y)
+            chunk_carry = self._1d_lut(
+                fn_result_type,
+                t,
+                [fn_map(chunk_id, x, y) for x in range(mask + 1) for y in range(mask + 1)],
+            )
+            carries.append(chunk_carry)
+        return carries
+
+    def _convert_compare(self, inputs, preds, fn_result) -> OpResult:
+        # Turn the two following warnings because it's a bit hard to refactor
+        # the following function and would introduce functions only called
+        # once.
+        # pylint: disable=too-many-branches
+        # pylint: disable=too-many-statements
+        if (
+            not self.all_of_the_inputs_are_encrypted
+            or inputs[0].dtype.bit_width != inputs[1].dtype.bit_width
+        ):
+            return self._convert_tlu()
+
+        assert isinstance(self.node.output.dtype, Integer)
+        resulting_type = NodeConverter.value_to_mlir_type(self.ctx, self.node.output)
+        four_bit_type = self._generate_type_fixed_bit_width_unsigned(self.node.output, 4)
+
+        # Comparison between a signed and an unsigned are tricky. To deal with them
+        # We add -min of the signed number to both operands such that they
+        # are both positive.
+        # To avoid overflowing the unsigned operand this addition is done "virtually"
+        # while constructing one of the luts.
+        # A flag ("is_unsigned_greater_than_half") is emitted in MLIR to keep track
+        # if the unsigned operand was greater than the max signed number as it
+        # is needed to determine the result of the comparison:
+        # Exemple: to compare x and y where x is an int3 and y and uint3, when y
+        # is greater than 4 we are sure than x will be less than x.
+
+        bit_width = self.node.output.dtype.bit_width
+        max_bit_width = 1 << bit_width
+
+        x = preds[0]
+        y = preds[1]
+
+        is_x_signed = inputs[0].dtype.is_signed
+        is_y_signed = inputs[1].dtype.is_signed
+        is_unsigned_greater_than_half = None
+        signed_offset = 1 << (bit_width - 1)
+
+        if not is_x_signed and is_y_signed:
+            is_unsigned_greater_than_half = self._1d_lut(
+                four_bit_type, x, [int(x >= signed_offset) << 2 for x in range(max_bit_width)]
+            )
+
+        if not is_y_signed and is_x_signed:
+            is_unsigned_greater_than_half = self._1d_lut(
+                four_bit_type, y, [int(y >= signed_offset) << 2 for y in range(max_bit_width)]
+            )
+
+        offset_x_by = 0
+        offset_y_by = 0
+        if is_x_signed or is_y_signed:
+            if is_x_signed:
+                x = self._add_cst(resulting_type, x, self._csti(inputs[0], signed_offset))
+            else:
+                offset_x_by = signed_offset
+            if is_y_signed:
+                y = self._add_cst(resulting_type, y, self._csti(inputs[0], signed_offset))
+            else:
+                offset_y_by = signed_offset
+
+        def compare(x, y):
+            out = None
+            if x < y:
+                out = Comparison.LESSER
+            elif x > y:
+                out = Comparison.GREATER
+            else:
+                out = Comparison.EQUAL
+            return out
+
+        def fn_map(i, x, y):
+            return compare(x, y) << (min(i, 1) * 2)
+
+        # Compare each bit group of the operands two by two.
+        # 2 bits are needed for each intermediate result as we can't
+        # shortcircuit in the loop as we would do in "traditional computing",
+        # meaning that for each groups we need to do if they were less, greater, or
+        # equal
+        carries = self._split_in_bit_groups(
+            x,
+            y,
+            self.bit_group_size,
+            fn_map,
+            four_bit_type,
+            offset_x_by=offset_x_by,
+            offset_y_by=offset_y_by,
+        )
+        # This is the reduction step -- we have an array where the entry i is the
+        # result of comparing the chunks of x and y at position i.
+        # We need to merge all of these information to deduce the final comparison output.
+        # Right now we're doing that in a sort of naive way -- we could
+        # increase pipeling by reducing in a tree instead than in a comb,
+        # and we could decrease the number of luts (but increase there bit_width)
+        # by merging several carryes at once.
+        carry = self._zero(four_bit_type)
+        # 0b[carry of the chunk][accumulator]
+        lut_carry = [
+            x if c == Comparison.EQUAL else c
+            for x in [0b00, 0b01, 0b10, 0b11]
+            for c in [0b00, 0b01, 0b10, 0b11]
+        ]
+        for i, chunk_carry in enumerate(carries):
+            if i == 0:
+                carry = chunk_carry
+                # Here all of the special casing for the last chunk is to
+                # avoid generating one other lut to cast the result to 0 or 1.
+                # Note that it might be a good idea to return 0 or 0xFFFF as
+                # that would allow using the result of the comparison to do masking.
+                if i == len(carries) - 1:
+                    carry = self._1d_lut(
+                        four_bit_type, carry, [int(fn_result(i)) for i in lut_carry]
+                    )
+            else:
+                next_carry = self._add(four_bit_type, chunk_carry, carry)
+                if i == len(carries) - 1:
+                    carry = self._1d_lut(
+                        four_bit_type, next_carry, [int(fn_result(i)) for i in lut_carry]
+                    )
+                else:
+                    carry = self._1d_lut(four_bit_type, next_carry, lut_carry)
+        out = None
+        if is_x_signed == is_y_signed:
+            out = carry
+        elif not is_x_signed:
+            carry = self._add(four_bit_type, is_unsigned_greater_than_half, carry)
+            carry = self._1d_lut(
+                resulting_type, carry, [0 if (i & 0b1100) else i & 0b01 for i in range(1 << 4)]
+            )
+            out = carry
+        elif not is_y_signed:
+            carry = self._add(four_bit_type, is_unsigned_greater_than_half, carry)
+            carry = self._1d_lut(
+                resulting_type, carry, [1 if (i & 0b1100) else i & 0b01 for i in range(1 << 4)]
+            )
+            out = carry
+        return out
+
+    def _convert_for_equal_or_unequal(self, fn_map_comparison_result) -> OpResult:
+        if not self.all_of_the_inputs_are_encrypted:
+            return self._convert_tlu()
+
+        assert isinstance(self.node.output.dtype, Integer)
+        assert isinstance(self.node.inputs[0].dtype, Integer)
+        assert isinstance(self.node.inputs[1].dtype, Integer)
+        assert self.node.inputs[0].dtype.bit_width == self.node.inputs[1].dtype.bit_width
+
+        bit_width = self.node.output.dtype.bit_width
+
+        # Equivalent to math.ceil(bit_width / group_size)
+        n_groups = -(bit_width // -self.bit_group_size)
+        is_x_signed = self.node.inputs[0].dtype.is_signed
+        is_y_signed = self.node.inputs[1].dtype.is_signed
+        if is_x_signed != is_y_signed:
+            n_groups += 1
+
+        resulting_type = NodeConverter.value_to_mlir_type(self.ctx, self.node.output)
+        n_groups_type = self._generate_type_fixed_bit_width_unsigned(self.node.output, n_groups)
+
+        x = self.preds[0]
+        y = self.preds[1]
+
+        # Equal and unequal between signed ints and unsigned ints are tricky.
+        # We reuse the same trick as for comparison to handle it.
+        offset_x_by = 0
+        offset_y_by = 0
+
+        is_unsigned_greater_than_half = None
+        signed_offset = 1 << (bit_width - 1)
+        cst = self._csti(self.node.inputs[0], signed_offset)
+
+        if not is_x_signed and is_y_signed:
+            is_unsigned_greater_than_half = self._1d_lut(
+                n_groups_type,
+                x,
+                [int(x >= signed_offset) << (n_groups - 1) for x in range(1 << bit_width)],
+            )
+
+        if not is_y_signed and is_x_signed:
+            is_unsigned_greater_than_half = self._1d_lut(
+                n_groups_type,
+                y,
+                [int(y >= signed_offset) << (n_groups - 1) for y in range(1 << bit_width)],
+            )
+        if is_x_signed or is_y_signed:
+            if is_x_signed:
+                x = self._add_cst(resulting_type, x, cst)
+            else:
+                offset_x_by = signed_offset
+            if is_y_signed:
+                y = self._add_cst(resulting_type, y, cst)
+            else:
+                offset_y_by = signed_offset
+
+        # [carries] will be an integer with at one bit per bit group.
+        # If the ith bit is 1 then it means that the ith bit group of x and y
+        # are different.
+        carries = self._split_in_bit_groups(
+            x,
+            y,
+            self.bit_group_size,
+            lambda i, x, y: int(x != y) << i,
+            n_groups_type,
+            offset_x_by=offset_x_by,
+            offset_y_by=offset_y_by,
+        )
+
+        carry = self._zero(n_groups_type)
+        if is_unsigned_greater_than_half:
+            carry = is_unsigned_greater_than_half
+        for chunk_carry in carries:
+            carry = self._add(n_groups_type, carry, chunk_carry)
+        return self._1d_lut(
+            resulting_type,
+            carry,
+            [int(fn_map_comparison_result(i == 0)) for i in range(1 << n_groups)],
+        )
+
+    def _convert_less(self) -> OpResult:
+        """
+        Convert "less" node to its corresponding MLIR representation.
+
+        Returns:
+            OpResult:
+                in-memory MLIR representation corresponding to `self.node`
+        """
+        return self._convert_compare(self.node.inputs, self.preds, lambda x: x == Comparison.LESSER)
+
+    def _convert_less_equal(self) -> OpResult:
+        """
+        Convert "less equal" node to its corresponding MLIR representation.
+
+        Returns:
+            OpResult:
+                in-memory MLIR representation corresponding to `self.node`
+        """
+        return self._convert_compare(
+            self.node.inputs, self.preds, lambda x: x in [Comparison.LESSER, Comparison.EQUAL]
+        )
+
+    def _convert_greater(self) -> OpResult:
+        """
+        Convert "greater" node to its corresponding MLIR representation.
+
+        Returns:
+            OpResult:
+                in-memory MLIR representation corresponding to `self.node`
+        """
+        return self._convert_compare(
+            self.node.inputs[::-1], self.preds[::-1], lambda x: x == Comparison.LESSER
+        )
+
+    def _convert_greater_equal(self) -> OpResult:
+        """
+        Convert "greater equal" node to its corresponding MLIR representation.
+
+        Returns:
+            OpResult:
+                in-memory MLIR representation corresponding to `self.node`
+        """
+        return self._convert_compare(
+            self.node.inputs[::-1],
+            self.preds[::-1],
+            lambda x: x in [Comparison.LESSER, Comparison.EQUAL],
+        )
+
+    def _convert_equal(self) -> OpResult:
+        """
+        Convert "equal" node to its corresponding MLIR representation.
+
+        Returns:
+            OpResult:
+                in-memory MLIR representation corresponding to `self.node`
+        """
+        return self._convert_for_equal_or_unequal(lambda x: x)
+
+    def _convert_not_equal(self) -> OpResult:
+        """
+        Convert "not equal" node to its corresponding MLIR representation.
+
+        Returns:
+            OpResult:
+                in-memory MLIR representation corresponding to `self.node`
+        """
+        return self._convert_for_equal_or_unequal(lambda x: not x)
 
     def _convert_bitwise_op(self, bitwise_op) -> OpResult:
         """

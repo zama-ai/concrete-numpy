@@ -178,6 +178,25 @@ class GraphConverter:
 
             elif name == "bitwise_xor":
                 assert_that(len(inputs) == 2)
+
+            elif name == "less":
+                assert_that(len(inputs) == 2)
+
+            elif name == "less_equal":
+                assert_that(len(inputs) == 2)
+
+            elif name == "greater":
+                assert_that(len(inputs) == 2)
+
+            elif name == "greater_equal":
+                assert_that(len(inputs) == 2)
+
+            elif name == "equal":
+                assert_that(len(inputs) == 2)
+
+            elif name == "not_equal":
+                assert_that(len(inputs) == 2)
+
             else:
                 assert_that(node.converted_to_table_lookup)
                 variable_input_indices = [

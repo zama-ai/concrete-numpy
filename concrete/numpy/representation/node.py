@@ -372,6 +372,12 @@ class Node:
                 "bitwise_or",
                 "bitwise_and",
                 "bitwise_xor",
+                "less",
+                "less_equal",
+                "greater",
+                "greater_equal",
+                "equal",
+                "not_equal",
             ]
         ):
             return False
