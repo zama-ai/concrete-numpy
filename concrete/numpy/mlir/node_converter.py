@@ -213,6 +213,10 @@ class NodeConverter:
         return self._convert_tlu()
 
     def _1d_lut(self, resulting_type, pred, lut_values) -> OpResult:
+        # If the lut is the identity then we can skip it.
+        if all(i == lut_values[i] for i in range(0, len(lut_values))):
+            return pred
+
         lut_type = RankedTensorType.get(
             (len(lut_values),), IntegerType.get_signless(64, context=self.ctx)
         )
