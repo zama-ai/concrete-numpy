@@ -11,6 +11,7 @@ from typing import Any, Callable, Dict, List, Tuple, Union
 import numpy as np
 import pytest
 
+from concrete.numpy.compilation.configuration import NodeConverterConfiguration
 import concrete.numpy as cnp
 import tests
 
@@ -117,6 +118,7 @@ class Helpers:
             jit=True,
             insecure_key_cache_location=INSECURE_KEY_CACHE_LOCATION,
             global_p_error=(1 / 10_000),
+            node_converter_configuration=NodeConverterConfiguration(2),
         )
 
     @staticmethod

@@ -24,6 +24,7 @@ from mlir.ir import (
     RankedTensorType,
 )
 
+from ..compilation.configuration import NodeConverterConfiguration
 from ..dtypes import Integer, SignedInteger
 from ..internal.utils import assert_that
 from ..representation import Graph, Node, Operation
@@ -613,7 +614,11 @@ class GraphConverter:
         return sanitized_args
 
     @staticmethod
-    def convert(graph: Graph, virtual: bool = False) -> str:
+    def convert(
+        graph: Graph,
+        virtual: bool = False,
+        node_converter_configuration: NodeConverterConfiguration = None,
+    ) -> str:
         """
         Convert a computation graph to its corresponding MLIR representation.
 
@@ -674,6 +679,9 @@ class GraphConverter:
                             preds,
                             constant_cache,
                             from_elements_operations,
+                            node_converter_configuration
+                            if node_converter_configuration
+                            else NodeConverterConfiguration(),
                         )
                         ir_to_mlir[node] = node_converter.convert()
 

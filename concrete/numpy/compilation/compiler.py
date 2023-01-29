@@ -439,7 +439,11 @@ class Compiler:
             self._evaluate("Compiling", inputset)
             assert self.graph is not None
 
-            mlir = GraphConverter.convert(self.graph, virtual=self.configuration.virtual)
+            mlir = GraphConverter.convert(
+                self.graph,
+                virtual=self.configuration.virtual,
+                node_converter_configuration=self.configuration.node_converter_configuration,
+            )
             if self.artifacts is not None:
                 self.artifacts.add_mlir_to_compile(mlir)
 

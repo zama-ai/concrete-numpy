@@ -10,6 +10,17 @@ DEFAULT_P_ERROR = None
 DEFAULT_GLOBAL_P_ERROR = 1 / 100_000
 
 
+class NodeConverterConfiguration:
+    """
+    Configuration to describe how to emit low-level MLIR operators.
+    It provides default values to different hyper-parameters, which
+    be overriden depending on the context.
+    """
+
+    def __init__(self, split_in_n_group_of_bits=2):
+        self.split_in_n_group_of_bits = split_in_n_group_of_bits
+
+
 class Configuration:
     """
     Configuration class, to allow the compilation process to be customized.
@@ -33,6 +44,7 @@ class Configuration:
     global_p_error: Optional[float]
     insecure_key_cache_location: Optional[str]
     auto_adjust_rounders: bool
+    node_converter_configuration: NodeConverterConfiguration
 
     # pylint: enable=too-many-instance-attributes
 
@@ -75,6 +87,7 @@ class Configuration:
         p_error: Optional[float] = None,
         global_p_error: Optional[float] = None,
         auto_adjust_rounders: bool = False,
+        node_converter_configuration: Optional[NodeConverterConfiguration] = None,
     ):
         self.verbose = verbose
         self.show_graph = show_graph
@@ -94,6 +107,10 @@ class Configuration:
         self.p_error = p_error
         self.global_p_error = global_p_error
         self.auto_adjust_rounders = auto_adjust_rounders
+        if node_converter_configuration is not None:
+            self.node_converter_configuration = node_converter_configuration
+        else:
+            self.node_converter_configuration = NodeConverterConfiguration()
 
         self._validate()
 

@@ -27,6 +27,7 @@ from mlir.ir import (
     Type,
 )
 
+from ..compilation.configuration import NodeConverterConfiguration
 from ..dtypes import Integer, UnsignedInteger
 from ..internal.utils import assert_that
 from ..representation import Graph, Node, Operation
@@ -66,11 +67,7 @@ class NodeConverter:
     constant_cache: Dict[Tuple[Type, Attribute], OpResult]
     from_elements_operations: Dict[OpResult, List[OpResult]]
 
-    # When converting bitwise / comparison operations convert
-    # in chunk of [n] bits.
-    # Can be configured
-    bit_group_size: int = 2
-
+    configuration: NodeConverterConfiguration
     # pylint: enable=too-many-instance-attributes
 
     @staticmethod
@@ -133,6 +130,7 @@ class NodeConverter:
         preds: List[OpResult],
         constant_cache: Dict[Tuple[Type, Attribute], OpResult],
         from_elements_operations: Dict[OpResult, List[OpResult]],
+        configuration: NodeConverterConfiguration,
     ):
         self.ctx = ctx
         self.graph = graph
@@ -142,6 +140,8 @@ class NodeConverter:
         self.all_of_the_inputs_are_encrypted = True
         self.all_of_the_inputs_are_tensors = True
         self.one_of_the_inputs_is_a_tensor = False
+
+        self.configuration = configuration
 
         for inp in node.inputs:
             if not inp.is_encrypted:
@@ -419,7 +419,7 @@ class NodeConverter:
         carries = self._split_in_bit_groups(
             x,
             y,
-            self.bit_group_size,
+            self.configuration.split_in_n_group_of_bits,
             fn_map,
             four_bit_type,
             offset_x_by=offset_x_by,
@@ -487,7 +487,7 @@ class NodeConverter:
         bit_width = self.node.output.dtype.bit_width
 
         # Equivalent to math.ceil(bit_width / group_size)
-        n_groups = -(bit_width // -self.bit_group_size)
+        n_groups = -(bit_width // -self.configuration.split_in_n_group_of_bits)
         is_x_signed = self.node.inputs[0].dtype.is_signed
         is_y_signed = self.node.inputs[1].dtype.is_signed
         if is_x_signed != is_y_signed:
@@ -537,7 +537,7 @@ class NodeConverter:
         carries = self._split_in_bit_groups(
             x,
             y,
-            self.bit_group_size,
+            self.configuration.split_in_n_group_of_bits,
             lambda i, x, y: int(x != y) << i,
             n_groups_type,
             offset_x_by=offset_x_by,
@@ -655,8 +655,8 @@ class NodeConverter:
         # Know to compute aa op ee we can use a lut if we use the following trick:
         # There's a bijection between (aa, ee) and (aa << 2 + ee), so we can precompute
         # all aa op ee and put them in a lut indexed by (aa << 2 + ee)
-        for offset in range(0, bit_width, self.bit_group_size):
-            bit_width_this = self.bit_group_size
+        for offset in range(0, bit_width, self.configuration.split_in_n_group_of_bits):
+            bit_width_this = self.configuration.split_in_n_group_of_bits
 
             bitwise_lut = [
                 bitwise_op(x, y) << offset
