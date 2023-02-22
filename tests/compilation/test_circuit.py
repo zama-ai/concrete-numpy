@@ -376,12 +376,16 @@ def test_circuit_virtual_then_fhe(helpers):
 
     assert circuit.simulate(3, 5) == 8
 
+    assert circuit.is_virtual
     circuit.enable_fhe()
+    assert not circuit.is_virtual
 
     assert circuit.simulate(3, 5) == 8
     assert circuit.encrypt_run_decrypt(3, 5) == 8
 
+    assert not circuit.is_virtual
     circuit.enable_fhe()
+    assert not circuit.is_virtual
 
     assert circuit.simulate(3, 5) == 8
     assert circuit.encrypt_run_decrypt(3, 5) == 8

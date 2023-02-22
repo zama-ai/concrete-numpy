@@ -211,6 +211,13 @@ class Circuit:
         self.server.cleanup()
 
     @property
+    def is_virtual(self) -> bool:
+        """
+        Get whether the circuit is virtual.
+        """
+        return self.configuration.virtual
+
+    @property
     def complexity(self) -> float:
         """
         Get complexity of the circuit.
