@@ -198,7 +198,7 @@ class Client:
         """
 
         self.keygen(force=False)
-        outputs = ClientSupport.decrypt_result(self._keyset, result)
+        outputs = ClientSupport.decrypt_result(self.specs.client_parameters, self._keyset, result)
         if not isinstance(outputs, tuple):
             outputs = (outputs,)
 
@@ -228,7 +228,9 @@ class Client:
                             output < (np.prod(crt_decomposition) // 2),
                             output,
                             -np.prod(crt_decomposition) + output,
-                        ).astype(np.int64)
+                        ).astype(
+                            np.int64
+                        )  # type: ignore
 
                     sanitized_outputs.append(sanititzed_output)
 
@@ -242,7 +244,9 @@ class Client:
                         output = output.astype(np.longlong)  # to prevent overflows in numpy
                         sanititzed_output = np.where(
                             output < (2 ** (n - 1)), output, output - (2**n)
-                        ).astype(np.int64)
+                        ).astype(
+                            np.int64
+                        )  # type: ignore
                         sanitized_outputs.append(sanititzed_output)
             else:
                 sanitized_outputs.append(
