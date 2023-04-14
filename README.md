@@ -26,6 +26,7 @@
   </a>
 </p>
 
+:warning: Concrete Numpy is now integrated into Concrete (former package `concrete-numpy` is replaced by `concrete-python`). Read full announcement [here](https://www.zama.ai/post/announcing-concrete-v1-0-0)
 
 **Concrete Numpy** is an open-source library which simplifies the use of fully homomorphic encryption (FHE) in Python.
 
