@@ -4,6 +4,10 @@
 
 <figure><img src="_static/zama_home_docs.png" alt=""><figcaption></figcaption></figure>
 
+{% hint style="warning" %}
+Concrete Numpy is now integrated into Concrete (former package `concrete-numpy` is replaced by `concrete-python`). Read full announcement [here](https://www.zama.ai/post/announcing-concrete-v1-0-0)
+{% endhint %}
+
 **Concrete-Numpy** is an open-source library which simplifies the use of fully homomorphic encryption (FHE).
 
 FHE is a powerful cryptographic tool, which allows computation to be performed directly on encrypted data without needing to decrypt it first. With FHE, you can build services that preserve privacy for all users. FHE is also great against data breaches as everything is done on encrypted data. Even if the server is compromised, in the end no sensitive data is leaked.
