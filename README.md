@@ -131,7 +131,7 @@ Various tutorials are proposed in the documentation to help you start writing ho
 
 - How to use Concrete Numpy with [Decorators](https://docs.zama.ai/concrete-numpy/tutorials/decorator)
 - Partial support of [Floating Points](https://docs.zama.ai/concrete-numpy/tutorials/floating_points)
-- How to perform [Table Lookup](https://docs.zama.ai/concrete-numpy/tutorials/table_lookup)
+- How to perform [Table Lookup](https://docs.zama.ai/concrete-numpy/tutorials/table_lookups)
 
 More generally, if you have built awesome projects using Concrete Numpy, feel free to let us know and we'll link to it!
 
