@@ -223,7 +223,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python ${{ matrix.python_version }}
-        uses: actions/setup-python@5ccb29d8773c3f3f653e1705f474dfaa8a06a912
+        uses: actions/setup-python@bd6b4b6205c4dbad673328db7b31b7fab9e241c0
         with:
           python-version: ${{ matrix.python_version }}
 
@@ -450,7 +450,7 @@ jobs:
         uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b
 
       - name: Set up Python ${{ matrix.python_version }}
-        uses: actions/setup-python@5ccb29d8773c3f3f653e1705f474dfaa8a06a912
+        uses: actions/setup-python@bd6b4b6205c4dbad673328db7b31b7fab9e241c0
         with:
           python-version: ${{ matrix.python_version }}
 
@@ -476,7 +476,7 @@ jobs:
         uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b
 
       - name: Set up Python 3.8
-        uses: actions/setup-python@5ccb29d8773c3f3f653e1705f474dfaa8a06a912
+        uses: actions/setup-python@bd6b4b6205c4dbad673328db7b31b7fab9e241c0
         with:
           python-version: '3.8'
 
